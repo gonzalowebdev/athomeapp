@@ -1,0 +1,6 @@
+{
+  "name": "ATHOME ENFERMERIA",
+  "description": "Plataforma de contratación y reserva de turnos de enfermería para internación a domicilio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
