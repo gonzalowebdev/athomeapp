@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, MessageCircle, ArrowRight, Activity, Thermometer, ShieldAlert } from 'lucide-react';
+import { Send, Bot, User, Sparkles, MessageCircle, ArrowRight, Activity, Thermometer, ShieldAlert, Settings, Server, Globe, Wifi } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 export default function AiConsultantTab() {
@@ -14,6 +14,49 @@ export default function AiConsultantTab() {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Mobile API Server URL state & persistence
+  const [showServerSettings, setShowServerSettings] = useState(false);
+  const [serverUrl, setServerUrl] = useState(() => {
+    return localStorage.getItem('athome_api_url') || '';
+  });
+
+  const getApiUrl = (endpoint: string): string => {
+    // 1. Check if configured in state / localStorage
+    if (serverUrl.trim()) {
+      return `${serverUrl.trim().replace(/\/$/, '')}${endpoint}`;
+    }
+
+    // 2. Build-time environment variable
+    const buildTimeUrl = (import.meta as any).env.VITE_API_URL;
+    if (buildTimeUrl) {
+      return `${buildTimeUrl.trim().replace(/\/$/, '')}${endpoint}`;
+    }
+
+    // 3. Fallback on mobile/native/local environment to the hosted server URL in AI Studio
+    const isLocalMobile = 
+      window.location.hostname === 'localhost' || 
+      window.location.hostname === '127.0.0.1' || 
+      window.location.protocol === 'file:';
+    
+    const isCapacitor = !!(window as any).Capacitor;
+
+    if (isLocalMobile || isCapacitor) {
+      // Deployed Shared AI Studio URL of our backend template
+      const defaultPreviewUrl = 'https://ais-pre-wpark4jmpfkcztxznmchrl-266193658047.us-east1.run.app';
+      return `${defaultPreviewUrl.replace(/\/$/, '')}${endpoint}`;
+    }
+
+    // 4. Fallback relative path for standard web environments
+    return endpoint;
+  };
+
+  const saveServerUrl = (url: string) => {
+    const trimmed = url.trim();
+    setServerUrl(trimmed);
+    localStorage.setItem('athome_api_url', trimmed);
+    setShowServerSettings(false);
+  };
 
   const quickPrompts = [
     "Paciente operado de cadera, requiere movilización segura",
@@ -45,7 +88,7 @@ export default function AiConsultantTab() {
     setIsTyping(true);
 
     try {
-      const response = await fetch('/api/consultant', {
+      const response = await fetch(getApiUrl('/api/consultant'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,10 +116,15 @@ export default function AiConsultantTab() {
     } catch (error) {
       console.error('Error connecting to AI consultant endpoint:', error);
       
+      const isMobile = window.location.hostname === 'localhost' || window.location.protocol === 'file:';
+      const promptTip = isMobile 
+        ? '\n\n💡 Tip para desarrollo móvil: Si estás probando la app desde un APK en tu teléfono, asegúrate de configurar la dirección de tu servidor web en el panel superior (icono de engranaje ⚙️) para conectar el chat.'
+        : '';
+
       const errorMsg: ChatMessage = {
         id: 'msg-err-' + Math.random().toString(36).substring(2, 9),
         sender: 'ai',
-        text: '¡Disculpa las molestias! Hubo un problema al procesar la respuesta asistida por IA. Si tienes una consulta urgente sobre guardia de enfermería o curación a domicilio, por favor contáctanos al WhatsApp de ATHOME (+54 9 11 5821-4972) y un Coordinador Oficial de Guardia te dará una respuesta inmediata de tarifas.',
+        text: `¡Disculpa las molestias! Hubo un problema al conectar con el servidor de Inteligencia Artificial.${promptTip}\n\nSi tienes una consulta urgente sobre guardia de enfermería o curación a domicilio, por favor contáctanos al WhatsApp de ATHOME (+54 9 11 5821-4972) y un Coordinador Oficial de Guardia te dará una respuesta inmediata de tarifas.`,
         createdAt: new Date().toISOString()
       };
       
@@ -100,18 +148,73 @@ export default function AiConsultantTab() {
             <Bot className="h-5 w-5 animate-bounce text-teal-100" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-800 text-sm flex items-center">
-              Asesoría de Coordinación Médica IA &nbsp;
+            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+              Asesoría de Coordinación Médica IA
               <span className="text-[9px] uppercase tracking-wider font-mono font-bold text-teal-600 bg-teal-100 border border-teal-200 px-1.5 py-0.2 rounded-full">Gemini Pro</span>
             </h3>
             <p className="text-[10px] text-slate-500">Haz consultas sobre servicios específicos de enfermería domiciliaria para tu cuadro.</p>
           </div>
         </div>
-        <div className="hidden sm:flex items-center space-x-1 text-[10px] font-mono font-bold bg-white text-emerald-600 px-2 py-1 rounded-lg border border-teal-100 shadow-3xs">
-          <Activity className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
-          <span>SISTEMA DE ASIGNACIÓN ACTIVO</span>
+        <div className="flex items-center space-x-2">
+          <div className="hidden sm:flex items-center space-x-1 text-[10px] font-mono font-bold bg-white text-emerald-600 px-2 py-1 rounded-lg border border-teal-100 shadow-3xs">
+            <Activity className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
+            <span>SISTEMA DE ASIGNACIÓN ACTIVO</span>
+          </div>
+          <button
+            onClick={() => setShowServerSettings(!showServerSettings)}
+            type="button"
+            className="flex items-center gap-1.5 text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-3xs transition-all cursor-pointer"
+            title="Configuración de Servidor"
+          >
+            <Settings className="h-4 w-4 text-slate-500" />
+            <span>Conexión</span>
+          </button>
         </div>
       </div>
+
+      {/* Embedded Server Connection Settings for Mobile Developers */}
+      {showServerSettings && (
+        <div className="flex-shrink-0 bg-slate-900 text-slate-100 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-md animate-slide-in">
+          <div className="flex items-center space-x-2">
+            <Server className="h-4.5 w-4.5 text-amber-400" />
+            <h4 className="font-bold text-slate-200 text-xs uppercase tracking-wider">Conexión de Servidor (Testing Móvil)</h4>
+          </div>
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            Los teléfonos reales (APKs) no ejecutan servidores Node locales. Por defecto, tu móvil intentará conectarse a la URL de demostración en línea de AI Studio donde se hospeda el backend, pero puedes ingresar una dirección personalizada si desplegaste el backend de la app en Render, Railway, Vercel, etc.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <div className="flex-1">
+              <input
+                type="url"
+                placeholder="Ej: https://mi-servidor-athome.com"
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-705 text-slate-100 rounded-xl px-3.5 py-2 text-xs focus:ring-1 focus:ring-teal-500 focus:outline-hidden"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => saveServerUrl(serverUrl)}
+                className="bg-teal-600 hover:bg-teal-700 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-sm"
+              >
+                Guardar URL
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setServerUrl('');
+                  localStorage.removeItem('athome_api_url');
+                  setShowServerSettings(false);
+                }}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-xl transition-all cursor-pointer"
+              >
+                Restablecer (Auto)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grid containing Quick Prompts & Chat Container */}
       <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden min-h-0">
